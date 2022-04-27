@@ -471,7 +471,7 @@ function parse_commandline()
 
         "--t_L"
             arg_type=Float64
-            default=0.2 # (no units)
+            default=0.3 # (no units)
             help="telomere rel length" # (x_e) Telomere length as fraction of bivalent
 
         "--density"

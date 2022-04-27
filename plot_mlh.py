@@ -50,5 +50,5 @@ plt.text(0.7, 0.5, f'$N = {n_c}$', transform=plt.gca().transAxes)
 
 plt.savefig('mlh_data.svg')
 
-plt.show()
+#plt.show()
 

@@ -40,4 +40,4 @@ plt.xticks([0,1,2,3,4,5])
 plt.savefig('expt_univalents.svg')
 
 
-plt.show()
+#plt.show()
