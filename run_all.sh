@@ -1,4 +1,4 @@
-
+set -e
 julia=~/JuliaPro-1.4.0-1/Julia/bin/julia
 export JULIA_NUM_THREADS=6
 $julia zyp_output.jl

@@ -434,7 +434,7 @@ function parse_commandline()
 
         "--use_poisson"
             arg_type=Bool      # Whether to distribute RIs at a constant rate per uniform length
-            default=false      # (rather than a number proportional to chromosome length)
+            default=true      # (rather than a number proportional to chromosome length)
     end
     return parse_args(s)
 end

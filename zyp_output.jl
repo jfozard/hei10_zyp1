@@ -501,7 +501,7 @@ function parse_commandline()
 
         "--use_poisson"
             arg_type=Bool      # Whether to distribute RIs at a constant rate per uniform length
-            default=false      # (rather than a number proportional to chromosome length)
+            default=true      # (rather than a number proportional to chromosome length)
     end
     return parse_args(s)
 end
@@ -531,7 +531,7 @@ function plot_obj(filename, p; n=100)
     println("filename ", filename)
     open(filename,"w") do io
         # Write parameter values as first line of output file
-        println(io, "#Namespace(" * join(map(x-> string(x[1]) *"="*string(x[2]), collect(args)), ",") * ")")
+        println(io, "#Namespace(" * join(map(x-> string(x[1]) *"="*string(x[2]), collect(n_args)), ",") * ")")
 
         # Run (group of) simulations
         simulate_all(n_args, io)
