@@ -1,0 +1,10 @@
+python fig2_s1.py
+python fig1_s1.py
+python fig4_s1.py
+python fig5_s1.py
+#python fig_all_check_noise.py
+python fig4_s2.py
+python fig1.py
+python fig2.py
+python fig4.py
+python fig5.py
