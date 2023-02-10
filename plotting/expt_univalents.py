@@ -1,6 +1,6 @@
 
 """
-For experimental comparison with the univalent simulation plot - the unweighted means of the univalent counts from the 7 zyp1 null mutant lines in the Mercier paper are:
+For the experimental comparison with your univalent simulation plot - the unweighted means of the univalent counts from the 7 zyp1 null mutant lines in the Mercier paper are:
 
 Cells with 0 univalents:88.3
 
@@ -25,7 +25,7 @@ mpl.rcParams.update({
     'axes.labelsize':28,
     'savefig.edgecolor': 'none',
     'savefig.facecolor': 'none',
-    
+    'svg.fonttype': 'none',    
 })
 
 
@@ -37,7 +37,7 @@ plt.bar(data_num_uv, data_prop_uv, color='r')
 plt.ylabel('Relative frequency')
 plt.xlabel('Number of univalents per cell')
 plt.xticks([0,1,2,3,4,5])
-plt.savefig('expt_univalents.svg')
+plt.savefig('../output/data_output/expt_univalents.svg')
 
 
 #plt.show()

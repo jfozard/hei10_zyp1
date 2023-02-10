@@ -1,0 +1,12 @@
+library(car)
+library(plyr)
+library(AER)
+data <-read.csv('../output/simulation_figures/regtot-nuc-poisson-0.0-cell-co-counts.csv')
+f <- data$count
+print(mean(f))
+print(var(f))
+pm <- glm(count ~ 1, data, family = poisson)
+summary(pm)
+#dispersiontest(pm)
+dispersiontest(pm, alternative='less')
+#dispersiontest(pm, alternative='greater')

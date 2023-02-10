@@ -6,12 +6,8 @@ using LinearAlgebra
 using Random
 using SparseArrays
 using StatsBase
-using NLopt
-using StatsPlots
 using FiniteDiff
-using Plots
 using Distributions
-using GLM
 
 
 # Piecewise linear functions
@@ -108,19 +104,28 @@ end
 
 # RI HEI10 escape rate function \beta(C)*C (evaluated in place)
 function betaC!(dC, C, K, n_c)
-    @. dC = C ./ (1 .+ (C ./ K) .^ n_c)
+    @. dC =  C ./ (1 .+ (C ./ K) .^ n_c)
 end
 
 # Derivative of (\beta(C)*C) wrt C
 function d_betaC(C::Float64, K::Float64, n_c::Float64)::Float64
-    1 ./ (1.0 .+ (C ./ K) .^ n_c) .-
-    C ./ (1.0 .+ (C ./ K) .^ n_c) .^ 2 .* (n_c ./ K) .* (C ./ K) .^ (n_c - 1)
+    1 ./ (1.0 .+ (C ./ K) .^ n_c) .- C ./ (1.0 .+ (C ./ K) .^ n_c) .^ 2 .* (n_c ./ K) .* (C ./ K) .^ (n_c - 1)
 end
 
 # Derivative of (\beta(C)*C) wrt C (evaluated in place)
 function d_betaC!(dbC, C, K, n_c)
-    @. dbC = 1 ./ (1.0 .+ (C ./ K) .^ n_c) .-
-    C ./ (1.0 .+ (C ./ K) .^ n_c) .^ 2 .* (n_c ./ K) .* (C ./ K) .^ (n_c - 1)
+    @. dbC = 1 ./ (1.0 .+ (C ./ K) .^ n_c) .- C ./ (1.0 .+ (C ./ K) .^ n_c) .^ 2 .* (n_c ./ K) .* (C ./ K) .^ (n_c - 1)
+end
+
+
+
+
+function Hs(t; s=10.0)
+    0.5 .* (tanh.(t.*s) .+ 1)
+end
+
+function dHs(t; s=10.0)
+    0.5 *s .* ( 1.0./ cosh.(t.*s).^2)
 end
 
 ### Distributions of chromosome lengths
@@ -133,6 +138,7 @@ function basic_ode!(dyy::Array{Float64,1}, yy::Array{Float64,1}, p, t::Float64)
     N_array,           # Number of RIs (array)
     Q,           # Number of SCs
     K,           # Hill threshold
+    K_u,         # Cutoff for nucleoplasmic recycling
     a_nodes, # Rate of HEI10 absorption from pool to nodes
     betaC!,      # beta(C)*C function (passed to ODE for efficiency)
     d_betaC,     # derivative of beta(C)*C function wrt C
@@ -161,11 +167,11 @@ function basic_ode!(dyy::Array{Float64,1}, yy::Array{Float64,1}, p, t::Float64)
         betaC!(bbC, max.(C,0.0), K, gamma)
 
         # Rate of change of HEI10 amounts at the RIs
-        @. dC = - beta_2 .* bC[1:N] .- beta_3 .* C + a_nodes*pool
+        @. dC = - beta_2 .* bC[1:N] .*Hs(C .- K_u) .- beta_3.*Hs(C .- K_u) .* C + a_nodes*pool.*Hs(C.-K_u)
 
         # Rate of change of HEI10 in nuceloplasmic pool
 
-        @inbounds dyy[end] = dyy[end] -  a_nodes*pool*N + beta_2 *sum(bC[1:N]) + beta_3 *sum(C)
+        @inbounds dyy[end] = dyy[end] -  a_nodes*pool*sum(Hs(C.-K_u)) + beta_2 *sum(bC[1:N] .* Hs(C.-K_u)) + beta_3 *sum(C .* Hs(C.-K_u))
         offset += (N)
     end
 end
@@ -175,6 +181,7 @@ function jac!(J, yy, p, t)
     N_array,           # Number of RIs (array)
     Q,           # Number of SCs
     K,           # Hill threshold
+    K_u,           # Hill threshold	
     a_nodes,     # From pool onto RI
     betaC!,      # beta(C)*C function (passed to ODE for efficiency)
     d_betaC,     # derivative of beta(C)*C function wrt C
@@ -185,46 +192,52 @@ function jac!(J, yy, p, t)
 
     J[end, end] = 0
     offset = 0
+    @inbounds pool = yy[end]
 
     for q in 1:Q
         N = N_array[q]
         C = @view yy[offset+1:offset+N]
-
+        bbC = @view bC[1:N]
+        betaC!(bbC, max.(C,0.0), K, gamma)
         dbC::Float64 = 0.0
         idx::Int64 = 0
         @inbounds for j = 1:N
             dbC = d_betaC(max(0, C[j]), K, gamma)
-            J[offset+j, offset+j] = -(beta_2) * dbC - beta_3
-            J[offset+j, end] = a_nodes
-            J[end, offset+j] = beta_2*dbC + beta_3
+            J[offset+j, offset+j] = a_nodes*pool*dHs(C[j]-K_u)- beta_2*Hs(C[j]-K_u) * dbC -beta_2*dHs(C[j]-K_u )*bbC[j] - beta_3*Hs(C[j]-K_u) -beta_3*dHs(C[j]-K_u)*C[j]
+            J[offset+j, end] = a_nodes*Hs(C[j]-K_u)
+            J[end, offset+j] = beta_2*dbC*Hs(C[j]-K_u) + beta_2*bbC[j]*dHs(C[j]-K_u) + beta_3*Hs(C[j]-K_u) + beta_3*C[j]*dHs(C[j]-K_u) -a_nodes*pool*dHs(C[j]-K_u)
         end
-        J[end, end] = J[end, end] - N*a_nodes
+        J[end, end] = J[end, end] - sum(Hs(C.-K_u))*a_nodes
         offset += N
     end
 end
 
 
-function simulate_multi(idx, args, Lm, Ls)
+function simulate_multi(idx, args, Lm, Ls; tc=false)
 
     # Initialize random number generator with seed for this simulation
 
     L_array = Vector{Float64}()
     x_array = Vector{Vector{Float64}}()
     N_array = Vector{Int64}()
+    C0_array = Vector{Vector{Float64}}()
 
     y0 = Vector{Float64}()
 
     Q = size(Lm, 1)
 
+    C0_init = 0.0
+    
     M_start = 0.0
     mt = MersenneTwister(idx)
 
     # Multiplicative noise in the overall level of HEI10 (unused)
-    ratio_hei10 = exp(args["sd_hei10"]*randn(mt))
+    #ratio_hei10 = exp(args["sd_hei10"]*randn(mt))
 
     use_poisson = Bool(args["use_poisson"])
 
     for q = 1:Q
+        #mt = MersenneTwister(idx)
 
         # Generate SC length, sampled from Normal distribution clipped to +/- 3 S.D.
         L::Float64 = Float64(Lm[q])+Float64(Ls[q])*clamp(randn(mt), -3, 3)
@@ -235,7 +248,7 @@ function simulate_multi(idx, args, Lm, Ls)
 	if use_poisson
 	    N = rand(mt, Poisson(L*args["density"]))
 	else
-            N = floor(L*args["density"])
+            N = round(L*args["density"])
         end
         push!(N_array, N)
 
@@ -271,32 +284,54 @@ function simulate_multi(idx, args, Lm, Ls)
        	     end
 	    end
 
-        C0 *= ratio_hei10
+	    push!(C0_array, C0)
+        C0_init += sum(C0)
 
-        append!(y0, C0)
-        M_start += sum(C0)
+        #append!(y0, C0)
     end
 
     gamma::Float64 = Float64(args["gamma"]) # Hill coefficient (gamma)
     K::Float64 = Float64(args["K"]) # Hill threshold (K_C)
+    K_u::Float64 = Float64(args["K_u"]) # Hill threshold (K_C)	
 
     a_nodes::Float64 = Float64(args["a_nodes"])
     beta_2 = Float64(args["beta_2"]) # RI escape rate (loss to nuceloplasm) - not used here
     beta_3 = Float64(args["beta_3"]) # RI constant escape rate (loss to nuceloplasm) - not used here
     bC = zeros(Float64, sum(N_array)) # Buffer to store values of \beta(C)*C in ODE calculation avoiding allocating memory
 
-    pool0 = Float64(args["pool0"])*ratio_hei10
-
-    M_start += pool0
-
     # Construct initial ODE state vector
+
+    M_tot_mean = Float64(args["M_tot_mean"])
+    M_tot_sd = Float64(args["M_tot_sd"])
+
+    d_M = Truncated(Normal(M_tot_mean, M_tot_sd), max(0, M_tot_mean-3*M_tot_sd), M_tot_mean+3*M_tot_sd)
+
+    M_tot = rand(mt, d_M)
+
+    C0_tot = M_tot * Float64(args["C0_ratio"])
+    pool0 = M_tot * Float64(args["pool0_ratio"])    
+
+
+
+    M_start = 0.0
+    
+    for q = 1:Q
+    	C0_array[q] = C0_array[q]*(C0_tot/C0_init)
+	    M_start += sum(C0_array[q])
+        append!(y0, C0_array[q])
+    end
     push!(y0, pool0)
+
+    y0 = y0
+    M_start = M_start + pool0
+    
 
     # ODE system parameters
     p = (
         N_array,
         Q,
         K,
+	    K_u,
         a_nodes,
         betaC!,
         d_betaC,
@@ -308,21 +343,36 @@ function simulate_multi(idx, args, Lm, Ls)
 
     # Initialize ODE problem with jacobian
 
-    @show(y0)
+    j2 = spzeros(sum(N_array) + 1, sum(N_array) + 1)
 
     yy0 = zero(y0)
-    basic_ode!(yy0, y0, p, 0.0)
 
-    @show(yy0)
+    y0_test = 1.0*rand(size(y0)...).+0.5
+
+    basic_ode!(yy0, y0, p, 0.0)
+    jac!(j2, y0_test, p, 0.0)
+
+    if idx==1
+
+        j_fd = zeros(sum(N_array) + 1, sum(N_array) + 1)
+        FiniteDiff.finite_difference_jacobian!(j_fd, (y,x)-> basic_ode!(y, x, p, 0.0), y0_test)
+
+        @show("check jac")
+
+        @show(maximum(abs.(j_fd - j2)./max.(abs.(j2), 1e-6)))
+
+    end 
 
     # Initialize ODE problem with jacobian
     j = spzeros(sum(N_array) + 1, sum(N_array) + 1)
     g2 = ODEFunction(basic_ode!; jac=jac!, jac_prototype = j)
     prob_g = ODEProblem(g2, y0, (0.0, Float64(args["n_ts"]) * Float64(args["dt"])), p)
-    cb = PositiveDomain(g2) # Additional constraint to ensure non-negativity of concentration values during integration
+    cb = PositiveDomain(save=false)#g2) # Additional constraint to ensure non-negativity of concentration values during integration
+
+    if !tc
 
     # Solve ODE system using implicit Rodas5 solver, with tight relative error tolerance
-    sol = solve(prob_g,Rodas5(autodiff=:false), cb=cb, save_everystep=false)
+    sol = solve(prob_g,Rodas5(autodiff=:false), callback=cb, reltol=1e-12, save_everystep=true)
 
     offset = 0
     u_array = Vector{Vector{Float64}}()
@@ -338,8 +388,35 @@ function simulate_multi(idx, args, Lm, Ls)
 
         offset += N_array[q]
     end
+    if idx<100
+        @show(length(sol))
+    end
+    res=(L_array, x_array, u_array, u0_array)
+    else
+        sol = solve(prob_g,Rodas5(autodiff=:false), callback=cb, reltol=1e-12, save_everystep=true)
 
-    (L_array, x_array, u_array, u0_array)
+            t = sol.t
+            offset = 0
+            u_t_array = Vector{Array{Float64}}()
+            u0_array = Vector{Vector{Float64}}()
+
+            sol_end = sol.u[end]
+            sol_u = transpose(hcat(sol.u...))
+            for q in 1:Q
+
+                z = sol_u[:, offset+1:offset+N_array[q]]
+                push!(u_t_array, z)
+
+                z = y0[offset+1:offset+N_array[q]]
+                push!(u0_array, z)
+
+                offset += N_array[q]
+            end
+
+            p_t_array = sol_u[:, end]
+            res = (t, u_t_array, p_t_array, x_array, L_array)
+    end
+    res
 end
 
 
@@ -363,20 +440,23 @@ struct SimResult
     n_seed::Int
 end
 
+struct SimResult_TC
+    t ::Vector{Float64}
+    u_t_array::Vector{Array{Float64, 2}}
+    p_t::Vector{Float64}
+    x_array::Vector{Vector{Float64}}
+    L_array::Vector{Float64}
+    n_seed::Int
+end
+
 function simulate_all(args, io)
 
-    nb = 9
-    nh = 20
+
 
     Q = Int64(args["Q"])
 
-    prefix = args["prefix"]
-
-    hist_nn_t = zeros(Float64, Threads.nthreads(), Q, nh, nb)
-
     start::Int64 = Int64(args["start"])
     n::Int64 = Int64(args["n"])
-    @show(n)
     n_args = copy(args)
 
     solution_output = Vector{Vector{SimResult}}()
@@ -385,7 +465,7 @@ function simulate_all(args, io)
     end
 
     Threads.@threads for i in start:start+(n-1)
-        L_array, x_array, u_array, u0_array = simulate_multi(i, n_args, Lm[1:Q], Ls[1:Q])
+        L_array, x_array, u_array, u0_array = simulate_multi(i, n_args, Lm[1:Q], Ls[1:Q]; tc=false)
         s = SimResult(x_array, u_array, L_array, i)
         push!(solution_output[Threads.threadid()], s)
     end
@@ -398,7 +478,7 @@ function simulate_all(args, io)
         L_array = solution_output[i].L_array
 
         print(io, join(map(string, L_array), ',') * '\n')
-        for q in 1:Q
+        for q in 1:length(L_array)
             print(io, join(map(string, x_array[q]), ',') * '\n')
             print(io, join(map(string, u_array[q]), ',') * '\n')
         end
@@ -407,6 +487,52 @@ function simulate_all(args, io)
 
 end
 
+function simulate_all_tc(args, io)
+
+
+
+    Q = Int64(args["Q"])
+
+
+    start::Int64 = Int64(args["start"])
+    n::Int64 = Int64(args["n"])
+    @show(n)
+    n_args = copy(args)
+
+    solution_output = Vector{Vector{SimResult_TC}}()
+    for i in 1:Threads.nthreads()
+        push!(solution_output, Vector{SimResult_TC}())
+    end
+
+    Threads.@threads for i in start:start+(n-1)
+        t, u_t_array, p_t_array, x_array, L_array = simulate_multi(i, n_args, Lm[1:Q], Ls[1:Q]; tc=true)
+        s = SimResult_TC(t, u_t_array, p_t_array, x_array, L_array, i)
+        push!(solution_output[Threads.threadid()], s)
+    end
+
+    solution_output = vcat(solution_output...)
+
+    for i in 1:length(solution_output)
+        x_array = solution_output[i].x_array
+        u_t_array = solution_output[i].u_t_array
+        t = solution_output[i].t
+        L_array = solution_output[i].L_array
+        p_t = solution_output[i].p_t
+
+
+        print(io, join(map(string, L_array), ',') * '\n')
+        print(io, join(map(string, t), ',') * '\n')
+        for q in 1:Q
+            print(io, join(map(string, x_array[q]), ',') * '\n')
+            for j in 1:length(t)
+                print(io, join(map(string, u_t_array[q][j,:]), ',') * '\n')
+            end
+        end
+        print(io, join(map(string, p_t), ',') * '\n')
+    end
+
+
+end
 
 function parse_commandline()
 
@@ -426,7 +552,7 @@ function parse_commandline()
 
         "--n"
             arg_type=Int
-            default=100 # (No unit)
+            default=1000 # (No unit)
             help="number of seeds" # Number of different SCs to simulate, using a different RNG seed for each one
 
         "--n_ts"
@@ -444,24 +570,24 @@ function parse_commandline()
             default=1.0 # (a.u.)
             help="threshold for RI unbinding" # (K_C) Hill function thresold for escape of HEI10 from RI
 
+        "--K_u"
+     	    arg_type=Float64
+            default=0.5 # (a.u.)
+            help="threshold for RI HEI10 uptake (a.u.)"
+
         "--gamma"
     	    arg_type=Float64
     	    default=1.25 # (no units)
             help="Hill coefficient for RI unbinding" # (\gamma) Hill coefficient for escape of HEI10 from RI
 
-        "--pool0"
+	"--C0"
             arg_type=Float64
-            default=280.0 # (a.u.)
-            help="initial pool HEI10 concentration" # (c_0) HEI10 initial loading on SC
-
-        "--C0"
-            arg_type=Float64
-            default=6.8 # (a.u.)
+            default=1.0 # (a.u.)
             help="initial RI HEI10" # (C_0) HEI10 initial RI loading
 
         "--C0_noise"
             arg_type=Float64
-            default=2.2 # (a.u.)
+            default=0.33 # (a.u.)
             help="initial RI HEI10 noise" # (\sigma) Noise in HEI10 initial RI loading
 
         "--t_C0_ratio2"
@@ -481,50 +607,66 @@ function parse_commandline()
 
         "--a_nodes"
             arg_type=Float64   # (s^{-1})
-            default=0.17       # Rate of HEI10 absorption from pool to RIs
+            default=0.14       # Rate of HEI10 absorption from pool to RIs
+
 
          "--beta_2"
             arg_type=Float64   # (s^{-1})
-            default=0.04        # RI HEI10 escape rate into pool (C-dependent)
+            default=0.034        # RI HEI10 escape rate into pool (C-dependent)
 
         "--beta_3"
             arg_type=Float64   # (s^{-1})
             default=0.0        # RI HEI10 escape rate into pool (const) - This is zero in all the simulations in the paper
 
         "--Q"
-            arg_type=Int64  
+            arg_type=Int64
             default=5          # Number of chromosomes
-
-        "--sd_hei10"
-            arg_type=Float64   # (a.u.)
-            default=0.0        # Variation in total HEI10 amounts
 
         "--use_poisson"
             arg_type=Bool      # Whether to distribute RIs at a constant rate per uniform length
             default=true      # (rather than a number proportional to chromosome length)
+    
+        "--M_tot_mean"
+            arg_type=Float64
+            default=1170.0 # 237.2*(1.2+0.5*6.8 + 2*0.5*1.0*0.1*0.5*6.8  )
+            help="fixed total initial HEI10 amount"
+
+	"--M_tot_sd"
+            arg_type=Float64
+            default=75.0 # From simulations of loading. 
+            help="standard deviation of total initial HEI10 amount"
+
+	"--C0_ratio"
+	        arg_type=Float64
+	        default = 0.76 # (0.5*6.8 + 2*0.5*1.0*0.1*0.5*6.8)/(1.2+0.5*6.8 + 2*0.5*1.0*0.1*0.5*6.8)
+
+	"--pool0_ratio"
+	        arg_type=Float64
+	        default = 0.24 # (1.2)/(1.2+0.5*6.8 + 2*0.5*1.0*0.1*0.5*6.8)	
+
     end
     return parse_args(s)
 end
 
 
-function plot_obj(filename, p; n=100)
+function plot_obj(filename, p; n=100, tc=false, regtot=true)
     args = parse_commandline()
     println("Parsed args:")
 
     # Update simulation parameters from function call parameters
     n_args = copy(args)
     n_args["n"] = n
-    n_args["C0"] = p[1]
-    n_args["C0_noise"] = p[2]
-    n_args["pool0"] = p[3]
-    n_args["t_C0_ratio2"] = p[4]
-    n_args["t_L"] = p[5]
-    n_args["n_c"] = p[6]
-    n_args["a_nodes"] = p[7]
-    n_args["beta_2"] = p[8]
-    n_args["sd_hei10"] = p[9]
-    n_args["use_poisson"] = p[10]
-    n_args["prefix"] = p[11]
+
+
+    n_args["M_tot_sd"]=p[1]*sqrt(p[2]^2*(n_args["M_tot_mean"]^2 + n_args["M_tot_sd"]^2) + n_args["M_tot_sd"]^2)
+    n_args["M_tot_mean"] *= p[1]   
+
+    n_args["t_C0_ratio2"] = p[3]
+    n_args["t_L"] = p[4]
+    n_args["n_c"] = p[5]
+    n_args["a_nodes"] = p[6]
+    n_args["beta_2"] = p[7]
+
     for (arg,val) in n_args
         println("$arg=$val")
     end
@@ -534,7 +676,11 @@ function plot_obj(filename, p; n=100)
         println(io, "#Namespace(" * join(map(x-> string(x[1]) *"="*string(x[2]), collect(n_args)), ",") * ")")
 
         # Run (group of) simulations
-        simulate_all(n_args, io)
+        if tc
+            simulate_all_tc(n_args, io)
+        else
+            simulate_all(n_args, io)
+        end
     end
     println("done")
 end
@@ -548,7 +694,16 @@ total_SC_L = sum(Lm)
 @show(total_SC_L)
 
 
-# Simulations with / without poisson RI initialization
-plot_obj("out-var-0.0.dat", [6.8, 2.2, 280, 1.25, 0.3, 1.25, 0.17, 0.04, 0.0, false, "var-0.0-"]; n=10000)
-plot_obj("out-poisson-0.0.dat",[6.8, 2.2, 280, 1.25, 0.3, 1.25, 0.17, 0.04, 0.0, true, "poisson-0.0-"]; n=10000)
+p = "../output/simulation_output/"
 
+fac=3.5; @time plot_obj(p * "regtot-nuc-ox-poisson-0.0.dat",[fac, 0.0, 1.25, 0.3, 1.25, 0.14, 0.03]; n=10000)
+fac=3.5; plot_obj(p * "regtot-nuc-ox-poisson-0.2.dat",[fac, 0.2, 1.25, 0.3, 1.25, 0.14, 0.03]; n=10000)
+fac=1.0; plot_obj(p * "regtot-nuc-poisson-0.0.dat",[fac, 0.0, 1.25, 0.3, 1.25, 0.14, 0.03]; n=10000)
+fac=1.0; plot_obj(p * "regtot-nuc-poisson-0.2.dat",[fac, 0.2, 1.25, 0.3, 1.25, 0.14, 0.03]; n=10000)
+fac=1.0; plot_obj(p * "regtot-nuc-no-ends-poisson-0.0.dat",[fac, 0.0, 1.0, 0.3, 1.25, 0.14, 0.03]; n=10000)
+
+
+fac=3.5; plot_obj(p * "regtot-nuc-ox-poisson-0.0.kymo",[fac, 0.0, 1.25, 0.3, 1.25, 0.14, 0.03]; n=1, tc=true)
+fac=3.5; plot_obj(p * "regtot-nuc-ox-poisson-0.2.kymo",[fac, 0.2, 1.25, 0.3, 1.25, 0.14, 0.03]; n=1, tc=true)
+fac=1.0; plot_obj(p * "regtot-nuc-poisson-0.0.kymo",[fac, 0.0, 1.25, 0.3, 1.25, 0.14, 0.03]; n=1, tc=true)
+fac=1.0; plot_obj(p * "regtot-nuc-poisson-0.2.kymo",[fac, 0.2, 1.25, 0.3, 1.25, 0.14, 0.03]; n=1, tc=true)

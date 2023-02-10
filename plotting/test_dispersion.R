@@ -1,0 +1,13 @@
+library(car)
+library(plyr)
+library(AER)
+mercier <-read.csv('../mercier_zyp1/mercier zyp1 hei10 mlh1 data comb male zyp1.csv')
+colnames(mercier) <- c("genotype", "foci")
+f <- mercier$foci
+print(mean(f))
+print(var(f))
+pm <- glm(foci ~ 1, mercier, family = poisson)
+summary(pm)
+#dispersiontest(pm)
+dispersiontest(pm, alternative='less')
+#dispersiontest(pm, alternative='greater')
