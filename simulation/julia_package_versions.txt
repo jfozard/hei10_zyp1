@@ -1,0 +1,13 @@
+
+Julia 1.8
+Pkg.status()
+  [c7e460c6] ArgParse v1.1.4
+⌃ [459566f4] DiffEqCallbacks v2.24.3
+⌃ [0c46a032] DifferentialEquations v7.6.0
+⌃ [31c24e10] Distributions v0.25.79
+⌃ [6a86dc24] FiniteDiff v2.17.0
+⌃ [91a5bcdd] Plots v1.37.2
+  [1fd47b50] QuadGK v2.8.1
+  [860ef19b] StableRNGs v1.0.0
+  [2913bbd2] StatsBase v0.33.21
+  [2f01184e] SparseArrays

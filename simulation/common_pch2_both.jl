@@ -307,6 +307,8 @@ function simulate_all(args, io)
     end
 
     solution_output = vcat(solution_output...)
+    solution_seed = [s.n_seed for s in solution_output]
+    solution_output = solution_output[sortperm(solution_seed)]
 
     for i in 1:length(solution_output)
         x_array = solution_output[i].x_array
@@ -348,6 +350,9 @@ function simulate_all_tc(args, io)
     end
 
     solution_output = vcat(solution_output...)
+
+    solution_seed = [s.n_seed for s in solution_output]
+    solution_output = solution_output[sortperm(solution_seed)]
 
     for i in 1:length(solution_output)
         x_array = solution_output[i].x_array
