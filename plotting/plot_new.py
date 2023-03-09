@@ -30,8 +30,6 @@ mpl.rcParams.update({
 def rel_freq_hist(ax, m, bins=np.linspace(0,1,11), stacked=False):
     if (m<bins[0]).any() or (m>bins[-1]).any():
         print('DOMAIN', np.max(m), bins[-1], np.sum(m>bins[-1]))
-#        pass
-#        raise Exception
     
     if stacked==False:
         h, edges = np.histogram(m, bins)
@@ -193,7 +191,7 @@ def process_file(fn):
 
 
 
-def main(sim_file, prefix, max_n=3, max_n_cell=20, max_d = 60, downsample=False, obj_name = 'SC', obj_name_2 = 'SC', do_single=True, of=sys.stdout):
+def main(sim_file, prefix, max_n=3, max_n_cell=20, max_d = 60, n_d=13, downsample=False, obj_name = 'SC', obj_name_2 = 'SC', do_single=True, of=sys.stdout):
 
 
 
@@ -205,7 +203,7 @@ def main(sim_file, prefix, max_n=3, max_n_cell=20, max_d = 60, downsample=False,
     cd_all = data['cell_data']
 
     # Find range of Co number per SC/ per Cell
-    max_n_cell = 0
+#    max_n_cell = 0
     max_n_sc = 0
 
     
@@ -253,8 +251,6 @@ def main(sim_file, prefix, max_n=3, max_n_cell=20, max_d = 60, downsample=False,
     
 
     print('cell_tot_co', len(cell_tot_co))
-#    for i in range(0, len(cell_tot_co)-39, 39):
-#        print('variance', np.var(cell_tot_co[i:i+39], ddof=1))
         
     
     plt.plot(np.arange(max_n_cell+1), poisson(mean_n).pmf(np.arange(max_n_cell+1)), 'g-o')
@@ -300,7 +296,7 @@ def main(sim_file, prefix, max_n=3, max_n_cell=20, max_d = 60, downsample=False,
     
             
     fig, ax = plt.subplots()
-    rel_freq_hist(ax, d_pos, bins=np.linspace(0,max_d,10))
+    rel_freq_hist(ax, d_pos, bins=np.linspace(0,max_d,n_d))
     ax.set_xlim(0, max_d)
     ax.set_xlabel('CO spacing ($\\mu$m)')
     ax.set_ylabel('Relative frequency')
@@ -442,7 +438,7 @@ def main(sim_file, prefix, max_n=3, max_n_cell=20, max_d = 60, downsample=False,
 
             x = np.array(single_L)
             y = np.array(single_int)
-            npr.seed(123)
+            npr.seed(1234)
             idx = npr.choice(np.arange(len(x)), downsample_n, replace=False)
 
             x = x[idx]
@@ -463,19 +459,16 @@ def main(sim_file, prefix, max_n=3, max_n_cell=20, max_d = 60, downsample=False,
             plt.savefig(image_output_path+prefix+'single_int_vs_L_downsample.svg')
             plt.close()
 
-main('survey_wt_ox_0.0_1.0.dat', 'survey_wt_ox_0.0_1.0_', max_n_cell=35, do_single=False)
-main('survey_interpolate_ends_ox_0.1_0.9.dat', 'interpolate_0.1_ox_', max_n_cell=35, do_single=False)
-main('survey_wt_0.0_1.0.dat', 'survey_wt_0.0_1_', of=open(image_output_path+'wt_simulation_summary.txt', 'w'), do_single=False)
-main('survey_interpolate_ends_0.1_0.9.dat', 'interpolate_0.1_', of=open(image_output_path+'interpolate_simulation_summary.txt', 'w'), do_single=False)
-
-main('pch_0.2_0.15_0.1_regtot.dat', 'pch_', max_d=20, downsample=True, obj_name='Segment', obj_name_2='segment', of=open(image_output_path+'pch_simulation_summary.txt', 'w'))
-
+main('survey_wt_ox_0.0_1.0.dat', 'survey_wt_ox_0.0_1.0_', max_n_cell=35, do_single=False, n_d=14, max_d=65)
+main('survey_interpolate_ends_ox_0.1_0.9.dat', 'interpolate_0.1_ox_', max_n_cell=35, do_single=False, n_d=14, max_d=65)
+main('survey_wt_0.0_1.0.dat', 'survey_wt_0.0_1_', of=open(image_output_path+'wt_simulation_summary.txt', 'w'), do_single=False, n_d=14, max_d=65, max_n_cell=15)
+main('survey_interpolate_ends_0.1_0.9.dat', 'interpolate_0.1_', of=open(image_output_path+'interpolate_simulation_summary.txt', 'w'), do_single=False, n_d=14, max_d=65, max_n_cell=15)
+main('pch_0.2_0.15_0.1_regtot.dat', 'pch_', max_n_cell=20, max_d=24, n_d=13, downsample=True, obj_name='Segment', obj_name_2='segment', of=open(image_output_path+'pch_simulation_summary.txt', 'w'))
 
 main('test_5_4.5_0.0.dat', 'test_5_4.5_0.0_', max_n_cell=35, do_single=False)
 main('test_5_4.5_0.2.dat', 'test_5_4.5_0.2_', max_n_cell=35, do_single=False)
 main('test_5_1_0.0.dat', 'test_5_1_0.0_', do_single=False)
 main('test_5_1_0.2.dat', 'test_5_1_0.2_', do_single=False)
-
 
 
 

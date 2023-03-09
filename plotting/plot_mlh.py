@@ -21,7 +21,7 @@ mpl.rcParams.update({
 
 #
 
-with open('../mercer_data/MLH1 counts mercier paper fig S2.csv', 'r') as f:
+with open('../mercier_zyp1/MLH1 counts mercier paper fig S2.csv', 'r') as f:
     n = np.array(list(map(int, next(f).split(',')[1:])))
     c = np.array(list(map(int, next(f).split(',')[1:])))
 

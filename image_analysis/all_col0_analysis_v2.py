@@ -45,8 +45,8 @@ from utils import *
 import pandas as pd
 
 base_path = '/media/foz/moredata2/ZYP1/Col-0 (For zyp1 comparison)/'
-image_output_path = '../output/data_output2/'
-data_output_path = '../output/data_output2/'
+image_output_path = '../output/data_output/'
+data_output_path = '../output/data_output/'
 
 Path(image_output_path).mkdir(exist_ok=True, parents=True)
 
@@ -72,8 +72,8 @@ class PathData(object):
 
 def process():
 
-    of_pos = open('new_pos.txt','w')
-    of_int = open('new_int.txt', 'w')
+    of_pos = open(image_output_path+'new_pos.txt','w')
+    of_int = open(image_output_path+'new_int.txt', 'w')
 
     pd_all = []
     cd_all = []
@@ -105,6 +105,11 @@ def process():
             b = B.iloc[k+i-1]
 
             q, p, m = measure(paths[i], stack)
+
+            if len(q)!=len(p):
+                print('LENGTHS', len(q), len(p))
+                #print(A_plant.iloc[i-1])
+
             
             p = p*img_scale[np.newaxis,:]
 
@@ -162,6 +167,9 @@ def process():
 
         cd = CellData()
         cd.paths = []
+        cd.points = pts_fp
+        cd.point_path_idx = point_path_idx
+        cd.path_point_idx = path_point_idx
         for i in range(1,N_paths+1): 
 
 
@@ -227,8 +235,8 @@ for pd in pd_all:
 
         
 fig, ax = plt.subplots()
-rel_freq_hist(ax, spacing_abs, bins=np.linspace(0, 60, 11), color='r')
-plt.xlim(0, 60)
+rel_freq_hist(ax, spacing_abs, bins=np.linspace(0, 78, 14), color='r')
+plt.xlim(0, 78)
 plt.text(0.7, 0.9, f'N={len(spacing_abs)}', transform=plt.gca().transAxes)
 plt.xlabel('Focus spacing along chromosome pair ($\\mu$m)', fontsize=22)
 plt.ylabel('Relative frequency')

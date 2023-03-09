@@ -30,9 +30,9 @@ import pandas as pd
 from utils import *
 
 base_path = '/media/foz/moredata2/PCH2/'
-data_output_path = '../output/data_output2/'
+data_output_path = '../output/data_output/'
 
-image_output_path = '../output/data_output2/'
+image_output_path = '../output/data_output/'
 
 Path(image_output_path).mkdir(exist_ok=True, parents=True)
 
@@ -84,7 +84,7 @@ def process():
     cd_all = []
 
     n_off_path = 0
-    for group in A_g.groups:
+    for cell_idx, group in enumerate(A_g.groups):
 
         paths_cell = A_g.get_group(group)
         foci_cell = B_g.get_group(group)
@@ -107,7 +107,11 @@ def process():
         for i in range(1,N_paths+1):
 
             q, p, m = measure(paths[i], stack)
-            
+
+            if len(q)!=len(p):
+                print(cell_idx, i, 'LENGTHS', len(q), len(p))
+
+                    
             p = p*img_scale[np.newaxis,:]
             traced_paths[i] = p
 
@@ -159,6 +163,9 @@ def process():
 
         cd = CellData()
         cd.paths = []
+        cd.points = pts_fp
+        cd.point_path_idx = point_path_idx
+        cd.path_point_idx = path_point_idx
         for i in range(1, N_paths+1):
             pd = PathData()
             pd.SC_length = paths_cell['SC length'].iloc[i-1]
@@ -186,9 +193,10 @@ with open(data_output_path+'pch2.pkl', 'rb') as f:
 
 spacing_all = [ x*p.SC_length for p in pd_all for x in np.diff(np.sort(p.foci_pos)) ]
 print('MAX SPACING', np.max(spacing_all))
+assert(np.max(spacing_all)<24)
 plt.figure()
-plt.hist(spacing_all, bins=np.linspace(0,20,10), color='r')
-plt.xlim(0, 20)
+plt.hist(spacing_all, bins=np.linspace(0,24,13), color='r')
+plt.xlim(0, 24)
 plt.ylabel('Frequency')
 plt.xlabel('Focus Spacing ($\\mu$m)')
 plt.text(0.7, 0.9, f'$N={len(spacing_all)}$', transform=plt.gca().transAxes)
@@ -299,7 +307,7 @@ for i,v in length_by_no.items():
 print('len vs n regression')
 xx, yy, r2 = lin_fit(data_n, data_l, r2=True)
 
-with open('pch2_len_vs_n.txt', 'w') as of:
+with open(image_output_path+'pch2_len_vs_n.txt', 'w') as of:
     of.write('n,l\n')
     for n, l in zip(data_n, data_l):
         of.write(f'{n},{l}\n')  

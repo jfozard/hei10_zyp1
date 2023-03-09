@@ -119,6 +119,3 @@ generate_figure([(sim_input_path + p[0], p[1], p[2]) for p in prefixes], output_
 run(['inkscape', '-D', '-d', '300',  output_path+'fig4_s2.svg', '-o', output_path+'fig4_s2.png'])
 run(['inkscape', '-D', '-d', '300',  output_path+'fig4_s2.svg', '-o', output_path+'fig4_s2.pdf'])
 
-prefixes = [('survey_wt_0.0_1', 'WT',(1,2)), ('interpolate_0.1_noclip', 'WT+nuc',(1,2)), ('survey_wt_ox_0.0_1.0', 'OX', (2,3)), ('interpolate_0.1_ox_noclip', 'OX+nuc', (2,3))]
-generate_figure([(sim_input_path + p[0], p[1], p[2]) for p in prefixes], output_path+'fig_comp_combined_noclip.svg')
-run(['inkscape', '-D', '-d', '300',  output_path+'fig_comp_combined_noclip.svg', '-o', output_path+'fig_comp_combined_noclip.png'])

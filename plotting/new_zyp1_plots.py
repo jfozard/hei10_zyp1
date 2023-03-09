@@ -61,6 +61,11 @@ image_output_path = '../output/simulation_figures/'
 
 Path(image_output_path).mkdir(exist_ok=True, parents=True)
 
+
+Lm = [37.5, 40.4, 45.7, 53.8, 59.8]
+Ls = [4.93, 5.06, 5.86, 7.18, 7.13]
+
+
 R = 0.6
 T = 1.0
 
@@ -180,7 +185,7 @@ def process_file(fn):
 
     return {'path_data':pd_all, 'cell_data': cd_all }            
 
-def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdout):
+def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=78, of=sys.stdout):
 
     
     data = process_file(input_file)
@@ -220,13 +225,16 @@ def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdou
 
         sum_n = len(n_co_chr[q])
         
-        d = np.bincount(n_co_chr[q], minlength=max_n_sc+1)[:max_n_sc+1]
+        d = np.bincount(n_co_chr[q], minlength=max_n_sc+1)
+
+        if len(d)>max_n_sc+1:
+            d[max_n_sc] += np.sum(d[max_n_sc+1:])
+            d = d[:max_n_sc+1]
+            
         plt.bar(np.arange(max_n_sc+1), d/sum_n)
-
-        if np.max(n_co_chr)>max_n_sc:
-            print('RANGE', q, prefix, np.max(n_co_chr), max_n_sc, np.sum(np.array(n_co_chr)>max_n_sc))
-
-        
+        x_labels = [ str(i) for i in range(max_n_sc)] + [f'{max_n_sc}+']
+        plt.xticks( np.arange(max_n_sc+1), x_labels)
+                             
         plt.xticks(np.arange(max_n_sc+1))
         mean_n = np.mean(n_co_chr[q])
         var_n = np.var(n_co_chr[q], ddof=1)
@@ -234,6 +242,7 @@ def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdou
         plt.text(0.7, 0.7, f'$S^2={var_n:.2f}$', transform=plt.gca().transAxes)
 
         plt.plot(np.arange(max_n_sc+1), poisson(mean_n).pmf(np.arange(max_n_sc+1)), 'g-o')
+        plt.title('$\mu_{' + f'{q+1}' +'}=' + f'{Lm[q]:.1f}' + r'\mathrm{\mu m}$ $\sigma_{' + f'{q+1}' + '}=' + f'{Ls[q]:.1f}' +r'\mathrm{\mu m}$') 
         plt.xlabel('COs per chromosome pair')
         plt.ylabel('Relative frequency')
         plt.savefig(f'{prefix}-ch-{q}-number.svg')
@@ -265,7 +274,7 @@ def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdou
     plt.savefig(f'{prefix}-relpos.svg')
     plt.close()
 
-    print(prefix, ' N CO_pos ', len(pos))
+    print(prefix, ' N CO_pos ', len(pos), file=of)
 
     
     cell_tot_co = []
@@ -281,7 +290,7 @@ def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdou
     plt.xticks(np.arange(0, max_n+1, 10))
     plt.xlim(0, max_n)
     if np.max(cell_tot_co)>max_n:
-        print('DOMAIN', cell_tot_co, max_n)
+        print('DOMAIN CELL TOT', cell_tot_co, max_n)
         
     mean_n = np.mean(cell_tot_co)
     var_n = np.var(cell_tot_co, ddof=1)
@@ -330,16 +339,17 @@ def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdou
     npr.seed(112233)
     
     cell_no_univalents_with_classII = []
-    for cd in cd_all:
-        n = 0
-        cell_total_SC = sum(pd.SC_length for pd in cd.paths)
-        
-        for pd in cd.paths:
-            nf = len(pd.foci_pos)
-            extra_n = poisson.rvs((pd.SC_length/cell_total_SC)*average_classII)
-            if (nf + extra_n) ==0:
-                n+=1
-        cell_no_univalents_with_classII.append(n)
+    for i in range(10):
+        for cd in cd_all:
+            n = 0
+            cell_total_SC = sum(pd.SC_length for pd in cd.paths)
+
+            for pd in cd.paths:
+                nf = len(pd.foci_pos)
+                extra_n = poisson.rvs((pd.SC_length/cell_total_SC)*average_classII)
+                if (nf + extra_n) ==0:
+                    n+=1
+            cell_no_univalents_with_classII.append(n)
 
     print(prefix+f' no uv with {average_classII} classII length bias', np.bincount(cell_no_univalents_with_classII), file=of)
 
@@ -362,16 +372,17 @@ def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdou
     npr.seed(112233)
     
     cell_no_univalents_with_classII = []
-    for cd in cd_all:
-        n = 0
-        cell_total_SC = sum(pd.SC_length for pd in cd.paths)
-        
-        for pd in cd.paths:
-            nf = len(pd.foci_pos)
-            extra_n = poisson.rvs((pd.SC_length/cell_total_SC)*average_classII)
-            if (nf + extra_n) ==0:
-                n+=1
-        cell_no_univalents_with_classII.append(n)
+    for i in range(10):
+        for cd in cd_all:
+            n = 0
+            cell_total_SC = sum(pd.SC_length for pd in cd.paths)
+
+            for pd in cd.paths:
+                nf = len(pd.foci_pos)
+                extra_n = poisson.rvs((pd.SC_length/cell_total_SC)*average_classII)
+                if (nf + extra_n) ==0:
+                    n+=1
+            cell_no_univalents_with_classII.append(n)
 
     print(prefix+f' no uv with {average_classII} classII length bias', np.bincount(cell_no_univalents_with_classII), file=of)
 
@@ -388,14 +399,15 @@ def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdou
     npr.seed(112233)
     
     cell_no_univalents_with_classII = []
-    for cd in cd_all:
-        n = 0
-        for pd in cd.paths:
-            nf = len(pd.foci_pos)
-            extra_n = poisson.rvs(0.2*average_classII)
-            if (nf + extra_n) ==0:
-                n+=1
-        cell_no_univalents_with_classII.append(n)
+    for i in range(10):
+        for cd in cd_all:
+            n = 0
+            for pd in cd.paths:
+                nf = len(pd.foci_pos)
+                extra_n = poisson.rvs(0.2*average_classII)
+                if (nf + extra_n) ==0:
+                    n+=1
+            cell_no_univalents_with_classII.append(n)
 
     print(prefix+f' no uv with {average_classII} classII no length bias', np.bincount(cell_no_univalents_with_classII), file=of)
 
@@ -410,15 +422,16 @@ def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdou
 
 
     cell_no_univalents_with_classII = []
-    for cd in cd_all:
-        n = 0
-        extra_co = npr.randint(0, 5, 2)
-        for i, pd in enumerate(cd.paths):
-            nf = len(pd.foci_pos)
-            extra_n = np.sum(extra_co==i)
-            if (nf + extra_n) ==0:
-                n+=1
-        cell_no_univalents_with_classII.append(n)
+    for i in range(10):
+        for cd in cd_all:
+            n = 0
+            extra_co = npr.randint(0, 5, 2)
+            for i, pd in enumerate(cd.paths):
+                nf = len(pd.foci_pos)
+                extra_n = np.sum(extra_co==i)
+                if (nf + extra_n) ==0:
+                    n+=1
+            cell_no_univalents_with_classII.append(n)
 
     print(prefix+f' no uv with fixed 2 classII no length bias', np.bincount(cell_no_univalents_with_classII), file=of)
     
@@ -440,6 +453,7 @@ def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdou
         if len(fp)>1:
             spacing += list(np.diff(fp))
 
+    
 
 #    plt.figure()
     fig, ax = plt.subplots()
@@ -449,7 +463,7 @@ def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdou
     plt.xlim(0, 1)
     plt.savefig(f'{prefix}-spacing.svg')
 
-    print(prefix, ' N focus_spacing ', len(spacing))
+    print(prefix, ' N focus_spacing ', len(spacing), file=of)
 
 
     spacing_abs = []
@@ -460,7 +474,7 @@ def process(input_file, prefix, max_n=30, max_n_sc=10, max_dist=60, of=sys.stdou
             spacing_abs += list(np.diff(fp)*L)
 
     fig, ax = plt.subplots()
-    rel_freq_hist(ax, spacing_abs, bins=np.linspace(0, max_dist, 11))
+    rel_freq_hist(ax, spacing_abs, bins=np.linspace(0, max_dist, 14))
     plt.xlabel('CO spacing along chromosome pair ($\mu$m)', fontsize=22)
     plt.ylabel('Relative frequency')
     plt.xlim(0, max_dist)

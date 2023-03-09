@@ -44,8 +44,8 @@ PAIRS = True
 import pandas as pd
 
 base_path = '/media/foz/moredata2/ZYP1/ZYP1-1/'
-image_output_path = '../output/data_output2/'
-data_output_path = '../output/data_output2/'
+image_output_path = '../output/data_output/'
+data_output_path = '../output/data_output/'
 
 Path(image_output_path).mkdir(exist_ok=True, parents=True)
 
@@ -79,9 +79,9 @@ class PathData(object):
 def process():
 
 
-    of_idx = open('new_co_idx', 'w')
-    of_pos = open('new_zyp_pos.txt','w')
-    of_int = open('new_zyp_int.txt', 'w')
+    of_idx = open(image_output_path+'new_co_idx', 'w')
+    of_pos = open(image_output_path+'new_zyp_pos.txt','w')
+    of_int = open(image_output_path+'new_zyp_int.txt', 'w')
 
     pd_all = []
     cd_all = []
@@ -116,7 +116,11 @@ def process():
 
             j = i+1
             q, p, m = measure(paths[i], stack)
-            
+ 
+
+            if len(q)!=len(p):
+                print('LENGTHS', len(q), len(p))
+           
             p = p*img_scale[np.newaxis,:]
 
             if not pd.isna(b['Focus 1 ID']):
@@ -179,12 +183,12 @@ def process():
                     u = 2*group-1
                     o = 2*group
                 else:
-                    u = 2*group
-                    o = 2*group-1
+                    u = 2*group 
+                    o = 2*group -1
 
                 point_path_idx[j] = group
                 point_path_nearest[j] = u
-                path_point_relpos[group].append((pt_idx[u]/(len(traced_paths[u]-1))))
+                path_point_relpos[group].append((pt_idx[u]/(len(traced_paths[u])-1)))
                 path_point_idx[group].append(j)
                 
             else:
@@ -192,16 +196,20 @@ def process():
                 min_dist = distances[u]
                 group = (u+1)//2
 
+
                 if min_dist < dist_threshold*unit_scale:
                     point_path_idx[j] = group
                     point_path_nearest[j] = u
-                    path_point_relpos[group].append((pt_idx[u]/(len(traced_paths[u]-1))))
+                    path_point_relpos[group].append((pt_idx[u]/(len(traced_paths[u])-1)))
                     path_point_idx[group].append(j)
                 else:
-                    print('Off path')
+                    
+                    print('Off path', k, min_dist, u, pt_idx[u], len(traced_paths[u])-1)
                     n_off_path +=1    
       
         all_point_idx_on_paths = np.array(list(point_path_idx))
+
+        print('On path', len(list(point_path_idx)))
         
         total_on_path_intensity = np.sum(measured_intensities[all_point_idx_on_paths])
 
@@ -211,6 +219,10 @@ def process():
 
 
         cd = CellData()
+        cd.paths = []
+        cd.points = pts_fp
+        cd.point_path_idx = point_path_idx
+        cd.path_point_idx = path_point_idx
         
         for group in range(1,6): 
 
@@ -280,8 +292,8 @@ for pd in pd_all:
 
         
 fig, ax = plt.subplots()
-rel_freq_hist(ax, spacing_abs, bins=np.linspace(0, 60, 11), color='r')#, density=True)
-plt.xlim(0, 60)
+rel_freq_hist(ax, spacing_abs, bins=np.linspace(0, 78, 14), color='r')#, density=True)
+plt.xlim(0, 78)
 plt.text(0.7, 0.9, f'N={len(spacing_abs)}', transform=plt.gca().transAxes)
 plt.xlabel('Focus spacing along chromosome pair ($\\mu$m)', fontsize=22)
 plt.ylabel('Relative frequency')
